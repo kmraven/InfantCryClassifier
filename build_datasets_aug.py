@@ -11,9 +11,12 @@ from consts import *
 
 
 def aug_with_noise(y):
-    noise_amplitude = 0.1 * np.std(y)
-    noise = noise_amplitude * np.random.randn(len(y))
-    return y + noise
+    noise = np.random.normal(0, 0.05, len(y))
+    noisy_signal = y + noise
+    max_val = np.max(np.abs(noisy_signal))
+    if max_val > 1.0:
+        noisy_signal = noisy_signal / max_val
+    return noisy_signal
 
 
 def aug_with_gain(y):
@@ -53,7 +56,7 @@ def aug_with_shift(y):
     return y_shifted
 
 
-def save_mel_spectrogram(y, save_file_name, aug_funcs):
+def save_mel_spectrogram(y, sr, save_file_name, aug_funcs):
     for aug_func in aug_funcs:
         y = aug_func(y)
     mel_spectrogram = librosa.feature.melspectrogram(y=y, sr=sr)
@@ -127,14 +130,14 @@ def main():
                             for i in range(aug_ratio_dict[class_name]):
                                 executor.submit(
                                     save_mel_spectrogram,
-                                    formatted_y,
+                                    formatted_y, sr,
                                     os.path.join(save_dir, '.'.join(file.split('.')[:-1]) + f'_{i}' + '.png'),
                                     random.choice(all_combi_of_aug_funcs)
                                 )
                         else:
                             executor.submit(
                                 save_mel_spectrogram,
-                                formatted_y,
+                                formatted_y, sr,
                                 os.path.join(save_dir, '.'.join(file.split('.')[:-1]) + '.png'),
                                 [lambda x: x, ]
                             )
