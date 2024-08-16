@@ -62,7 +62,8 @@ class Net(nn.Module):
 
 def main():
     shutil.rmtree(OUTPUT_DIR)
-    os.makedirs(os.path.join(OUTPUT_DIR, 'trials'), exist_ok=True)
+    trials_dir = 'trials'
+    os.makedirs(os.path.join(OUTPUT_DIR, trials_dir), exist_ok=True)
 
     transform = [
         transforms.Grayscale(num_output_channels=1),
@@ -148,7 +149,7 @@ def main():
            'val_loss': val_loss_list,
            'val_acc': val_acc_list,
         })
-        df.to_csv(os.path.join(OUTPUT_DIR, 'trials', f"{trial.number}.csv"))
+        df.to_csv(os.path.join(OUTPUT_DIR, trials_dir, f"{trial.number}.csv"))
 
         return val_acc
 
