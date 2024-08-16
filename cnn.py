@@ -64,16 +64,16 @@ def main():
     shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    transforms = [
+    transform = [
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
     ]
-    val_transform = transforms.Compose(transforms)
-    transforms.extend([
+    val_transform = transforms.Compose(transform)
+    transform.extend([
         transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
     ])
-    train_transform = transforms.Compose(transforms)
+    train_transform = transforms.Compose(transform)
 
     train_dir = os.path.join(DATASETS_PATH, 'train')
     val_dir = os.path.join(DATASETS_PATH, 'val')
