@@ -103,7 +103,7 @@ def main():
             model.train()
             running_loss = 0
             for images, labels in train_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
+                images, labels = images.to(device), labels.to(device)
                 optimizer.zero_grad()
                 outputs = model(images)
                 loss = criterion(outputs, labels)
@@ -120,8 +120,7 @@ def main():
             total = 0
             with torch.no_grad():
                 for images, labels in val_loader:
-                    images = images.to(device)
-                    labels = labels.to(device)
+                    images, labels = images.to(device), labels.to(device)
                     outputs = model(images)
                     loss = criterion(outputs, labels)
                     running_loss += loss.item()
