@@ -19,7 +19,7 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
 CLASS_NUM = 5
-BATCH_SIZE = 1024
+BATCH_SIZE = 256
 EPOCH = 20
 NUM_WORKERS = 2
 in_height = 111
