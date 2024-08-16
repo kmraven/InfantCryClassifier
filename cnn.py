@@ -62,7 +62,7 @@ class Net(nn.Module):
 
 def main():
     shutil.rmtree(OUTPUT_DIR)
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(os.path.join(OUTPUT_DIR, 'trials'), exist_ok=True)
 
     transform = [
         transforms.Grayscale(num_output_channels=1),
