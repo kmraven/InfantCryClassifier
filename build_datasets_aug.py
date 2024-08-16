@@ -101,7 +101,7 @@ def main():
             wav_file_counts[class_name] = wav_count
     aug_ratio_dict = {label: TRAIN_DATA_PER_CLASS // num for label, num in wav_file_counts.items()}
 
-    with ThreadPoolExecutor(max_workers=psutil.cpu_count(logical=False) - 2) as executor:
+    with ThreadPoolExecutor(max_workers=psutil.cpu_count(logical=False) // 2) as executor:
         for class_name in os.listdir(RAWDATA_PATH):
             class_path = os.path.join(RAWDATA_PATH, class_name)
             if not os.path.isdir(class_path):
