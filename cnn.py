@@ -8,6 +8,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
+from consts import *
 
 seed = 123
 np.random.seed(seed)
@@ -15,9 +16,7 @@ random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
-DATASETS_PATH = r'./datasets'
 CLASS_NUM = 5
-
 BATCH_SIZE = 16
 WEIGHT_DECAY = 0.005
 LEARNING_RATE = 0.0001
@@ -49,109 +48,115 @@ class SimpleCNN(nn.Module):
         return x
 
 
-transform = transforms.Compose([
-    transforms.Grayscale(num_output_channels=1),
-    # transforms.Resize((128, 111)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
-    # transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
-])
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        # transforms.Resize((128, 111)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
+        # transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
+    ])
 
-train_dataset = datasets.ImageFolder(root=train_dir, transform=transform)
-val_dataset = datasets.ImageFolder(root=val_dir, transform=transform)
+    train_dataset = datasets.ImageFolder(root=train_dir, transform=transform)
+    val_dataset = datasets.ImageFolder(root=val_dir, transform=transform)
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
-val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
-gpu_id = sys.argv[1]
-os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
-device = torch.device("cuda")
+    gpu_id = sys.argv[1]
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
+    device = torch.device("cuda")
 
-model = SimpleCNN()
-model = model.to(device)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    model = SimpleCNN()
+    model = model.to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-train_loss_value=[]
-train_acc_value=[]
-test_loss_value=[]
-test_acc_value=[]
+    train_loss_value=[]
+    train_acc_value=[]
+    test_loss_value=[]
+    test_acc_value=[]
 
-for epoch in range(EPOCH):
-    print('epoch', epoch + 1)
-    for (inputs, labels) in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        
-    sum_loss = 0.0
-    sum_correct = 0
-    sum_total = 0
+    for epoch in range(EPOCH):
+        print('epoch', epoch + 1)
+        for (inputs, labels) in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+        sum_loss = 0.0
+        sum_correct = 0
+        sum_total = 0
 
-    for (inputs, labels) in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        sum_loss += loss.item()
-        _, predicted = outputs.max(1)
-        sum_total += labels.size(0)
-        sum_correct += (predicted == labels).sum().item()
+        for (inputs, labels) in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            sum_loss += loss.item()
+            _, predicted = outputs.max(1)
+            sum_total += labels.size(0)
+            sum_correct += (predicted == labels).sum().item()
 
-    print("train mean loss={}, accuracy={}".format(
-        sum_loss * BATCH_SIZE / len(train_loader.dataset),
-        float(sum_correct / sum_total)
-    ))
-    train_loss_value.append(sum_loss * BATCH_SIZE / len(train_loader.dataset))
-    train_acc_value.append(float(sum_correct / sum_total))
+        print("train mean loss={}, accuracy={}".format(
+            sum_loss * BATCH_SIZE / len(train_loader.dataset),
+            float(sum_correct / sum_total)
+        ))
+        train_loss_value.append(sum_loss * BATCH_SIZE / len(train_loader.dataset))
+        train_acc_value.append(float(sum_correct / sum_total))
 
-    sum_loss = 0.0
-    sum_correct = 0
-    sum_total = 0
+        sum_loss = 0.0
+        sum_correct = 0
+        sum_total = 0
 
-    for (inputs, labels) in val_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        sum_loss += loss.item()
-        _, predicted = outputs.max(1)
-        sum_total += labels.size(0)
-        sum_correct += (predicted == labels).sum().item()
+        for (inputs, labels) in val_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            sum_loss += loss.item()
+            _, predicted = outputs.max(1)
+            sum_total += labels.size(0)
+            sum_correct += (predicted == labels).sum().item()
 
-    print("test  mean loss={}, accuracy={}".format(
-        sum_loss * BATCH_SIZE / len(val_loader.dataset),
-        float(sum_correct / sum_total)
-    ))
-    test_loss_value.append(sum_loss*BATCH_SIZE/len(val_loader.dataset))
-    test_acc_value.append(float(sum_correct/sum_total))
+        print("test  mean loss={}, accuracy={}".format(
+            sum_loss * BATCH_SIZE / len(val_loader.dataset),
+            float(sum_correct / sum_total)
+        ))
+        test_loss_value.append(sum_loss*BATCH_SIZE/len(val_loader.dataset))
+        test_acc_value.append(float(sum_correct/sum_total))
 
-torch.save(model.state_dict(), 'model.pth')
+    torch.save(model.state_dict(), os.path.join(OUTPUT_DIR, 'model.pth'))
 
 
-# plot result
-plt.figure(figsize=(6,6))
+    # plot result
+    plt.figure(figsize=(6,6))
 
-plt.plot(range(EPOCH), train_loss_value)
-plt.plot(range(EPOCH), test_loss_value, c='#00ff00')
-plt.xlim(0, EPOCH)
-plt.ylim(0, 2.5)
-plt.xlabel('EPOCH')
-plt.ylabel('LOSS')
-plt.legend(['train loss', 'test loss'])
-plt.title('loss')
-plt.savefig("loss_image.png")
-plt.clf()
+    plt.plot(range(EPOCH), train_loss_value)
+    plt.plot(range(EPOCH), test_loss_value, c='#00ff00')
+    plt.xlim(0, EPOCH)
+    plt.ylim(0, 2.5)
+    plt.xlabel('EPOCH')
+    plt.ylabel('LOSS')
+    plt.legend(['train loss', 'test loss'])
+    plt.title('loss')
+    plt.savefig(os.path.join(OUTPUT_DIR, "loss_image.png"))
+    plt.clf()
 
-plt.plot(range(EPOCH), train_acc_value)
-plt.plot(range(EPOCH), test_acc_value, c='#00ff00')
-plt.xlim(0, EPOCH)
-plt.ylim(0, 1)
-plt.xlabel('EPOCH')
-plt.ylabel('ACCURACY')
-plt.legend(['train acc', 'test acc'])
-plt.title('accuracy')
-plt.savefig("accuracy_image.png")
+    plt.plot(range(EPOCH), train_acc_value)
+    plt.plot(range(EPOCH), test_acc_value, c='#00ff00')
+    plt.xlim(0, EPOCH)
+    plt.ylim(0, 1)
+    plt.xlabel('EPOCH')
+    plt.ylabel('ACCURACY')
+    plt.legend(['train acc', 'test acc'])
+    plt.title('accuracy')
+    plt.savefig(os.path.join(OUTPUT_DIR, "accuracy_image.png"))
+
+
+if __name__ == "__main__":
+    main()
