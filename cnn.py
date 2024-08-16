@@ -17,10 +17,10 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
 CLASS_NUM = 5
-BATCH_SIZE = 16
+BATCH_SIZE = 1024
 WEIGHT_DECAY = 0.005
 LEARNING_RATE = 0.0001
-EPOCH = 50
+EPOCH = 30
 NUM_WORKERS = 2
 
 train_dir = os.path.join(DATASETS_PATH, 'train')
