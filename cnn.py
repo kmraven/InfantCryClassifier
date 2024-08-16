@@ -1,65 +1,82 @@
 import os
 import sys
 import numpy as np
-import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
+import optuna
+import pandas as pd
 from consts import *
 
 seed = 123
 np.random.seed(seed)
-random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
 CLASS_NUM = 5
 BATCH_SIZE = 1024
-WEIGHT_DECAY = 0.005
-LEARNING_RATE = 0.0001
-EPOCH = 30
+EPOCH = 20
 NUM_WORKERS = 2
+in_height = 111
+in_width = 128
+kernel = 3
 
-train_dir = os.path.join(DATASETS_PATH, 'train')
-val_dir = os.path.join(DATASETS_PATH, 'val')
 
+class Net(nn.Module):
+  def __init__(self, num_layer, mid_units, num_filters):
+    super(Net, self).__init__()
+    self.activation = nn.ReLU()
+    #第1層
+    self.convs = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=num_filters[0], kernel_size=3)])
+    self.out_height = in_height - kernel + 1
+    self.out_width = in_width - kernel + 1
+    #第2層以降
+    for i in range(1, num_layer):
+      self.convs.append(nn.Conv2d(in_channels=num_filters[i-1], out_channels=num_filters[i], kernel_size=3))
+      self.out_height = self.out_height - kernel + 1
+      self.out_width = self.out_width - kernel + 1
+    #pooling層
+    self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+    self.out_height = int(self.out_height / 2)
+    self.out_width = int(self.out_width / 2)
+    #線形層
+    self.out_feature = self.out_height * self.out_width * num_filters[num_layer - 1]
+    self.fc1 = nn.Linear(in_features=self.out_feature, out_features=mid_units) 
+    self.fc2 = nn.Linear(in_features=mid_units, out_features=10)
 
-class SimpleCNN(nn.Module):
-    def __init__(self):
-        super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(128 * 16 * 13, 512)
-        self.fc2 = nn.Linear(512, CLASS_NUM)
-        self.relu = nn.ReLU()
-    
-    def forward(self, x):
-        x = self.pool(self.relu(self.conv1(x)))
-        x = self.pool(self.relu(self.conv2(x)))
-        x = self.pool(self.relu(self.conv3(x)))
-        x = x.view(-1, 128 * 16 * 13)
-        x = self.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+  def forward(self, x):
+    for l in self.convs:
+      x = l(x)
+      x = self.activation(x)
+    x = self.pool(x)
+    x = x.view(-1, self.out_feature)
+    x = self.fc1(x)
+    x = self.fc2(x)
+    return F.log_softmax(x, dim=1)
 
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    transform = transforms.Compose([
+
+    transforms = [
         transforms.Grayscale(num_output_channels=1),
-        # transforms.Resize((128, 111)),
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
+    ]
+    val_transform = transforms.Compose(transforms)
+    transforms.extend([
         transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
     ])
+    train_transform = transforms.Compose(transforms)
 
-    train_dataset = datasets.ImageFolder(root=train_dir, transform=transform)
-    val_dataset = datasets.ImageFolder(root=val_dir, transform=transform)
+    train_dir = os.path.join(DATASETS_PATH, 'train')
+    val_dir = os.path.join(DATASETS_PATH, 'val')
+    train_dataset = datasets.ImageFolder(root=train_dir, transform=train_transform)
+    val_dataset = datasets.ImageFolder(root=val_dir, transform=val_transform)
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
@@ -68,94 +85,76 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
     device = torch.device("cuda")
 
-    model = SimpleCNN()
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    def objective(trial):
+        lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
+        weight_decay = trial.suggest_loguniform('weight_decay', 1e-5, 1e-2)
+        num_layer = trial.suggest_int('num_layer', 3, 7)
+        mid_units = int(trial.suggest_discrete_uniform("mid_units", 100, 500, 100))
+        num_filters = [int(trial.suggest_discrete_uniform("num_filter_"+str(i), 16, 128, 16)) for i in range(num_layer)]
+        
+        model = Net(num_layer, mid_units, num_filters).to(device)
+        model = model.to(device)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    train_loss_value=[]
-    train_acc_value=[]
-    test_loss_value=[]
-    test_acc_value=[]
+        def train():
+            model.train()
+            running_loss = 0
+            for images, labels in train_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                optimizer.zero_grad()
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                running_loss += loss.item()
+                loss.backward()
+                optimizer.step()
+            train_loss = running_loss / len(train_loader)
+            return train_loss
 
-    for epoch in range(EPOCH):
-        print('epoch', epoch + 1)
-        for (inputs, labels) in train_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            
-        sum_loss = 0.0
-        sum_correct = 0
-        sum_total = 0
+        def valid():
+            model.eval()
+            running_loss = 0
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for images, labels in val_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+                    outputs = model(images)
+                    loss = criterion(outputs, labels)
+                    running_loss += loss.item()
+                    predicted = outputs.max(1, keepdim=True)[1]
+                    labels = labels.view_as(predicted)
+                    correct += predicted.eq(labels).sum().item()
+                    total += labels.size(0)
+            val_loss = running_loss / len(val_loader)
+            val_acc = correct / total
+            return val_loss, val_acc
 
-        for (inputs, labels) in train_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            sum_loss += loss.item()
-            _, predicted = outputs.max(1)
-            sum_total += labels.size(0)
-            sum_correct += (predicted == labels).sum().item()
+        loss_list = []
+        val_loss_list = []
+        val_acc_list = []
 
-        print("train mean loss={}, accuracy={}".format(
-            sum_loss * BATCH_SIZE / len(train_loader.dataset),
-            float(sum_correct / sum_total)
-        ))
-        train_loss_value.append(sum_loss * BATCH_SIZE / len(train_loader.dataset))
-        train_acc_value.append(float(sum_correct / sum_total))
+        for _ in range(EPOCH):
+            loss = train()
+            val_loss, val_acc = valid()
+            loss_list.append(loss)
+            val_loss_list.append(val_loss)
+            val_acc_list.append(val_acc)
+        
+        df = pd.DataFrame({
+           'loss': loss_list,
+           'val_loss': val_loss_list,
+           'val_acc': val_acc_list,
+        })
+        df.to_csv(os.path.join(OUTPUT_DIR, 'trials', f"{trial.number}.csv"))
 
-        sum_loss = 0.0
-        sum_correct = 0
-        sum_total = 0
+        return val_acc
 
-        for (inputs, labels) in val_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            sum_loss += loss.item()
-            _, predicted = outputs.max(1)
-            sum_total += labels.size(0)
-            sum_correct += (predicted == labels).sum().item()
-
-        print("test  mean loss={}, accuracy={}".format(
-            sum_loss * BATCH_SIZE / len(val_loader.dataset),
-            float(sum_correct / sum_total)
-        ))
-        test_loss_value.append(sum_loss*BATCH_SIZE/len(val_loader.dataset))
-        test_acc_value.append(float(sum_correct/sum_total))
-
-    torch.save(model.state_dict(), os.path.join(OUTPUT_DIR, 'model.pth'))
-
-
-    # plot result
-    plt.figure(figsize=(6,6))
-
-    plt.plot(range(EPOCH), train_loss_value)
-    plt.plot(range(EPOCH), test_loss_value, c='#00ff00')
-    plt.xlim(0, EPOCH)
-    plt.ylim(0, 2.5)
-    plt.xlabel('EPOCH')
-    plt.ylabel('LOSS')
-    plt.legend(['train loss', 'test loss'])
-    plt.title('loss')
-    plt.savefig(os.path.join(OUTPUT_DIR, "loss_image.png"))
-    plt.clf()
-
-    plt.plot(range(EPOCH), train_acc_value)
-    plt.plot(range(EPOCH), test_acc_value, c='#00ff00')
-    plt.xlim(0, EPOCH)
-    plt.ylim(0, 1)
-    plt.xlabel('EPOCH')
-    plt.ylabel('ACCURACY')
-    plt.legend(['train acc', 'test acc'])
-    plt.title('accuracy')
-    plt.savefig(os.path.join(OUTPUT_DIR, "accuracy_image.png"))
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=100)
+    df = study.trials_dataframe()
+    df.to_csv(os.path.join(OUTPUT_DIR, "trials_dataframe.csv"))
 
 
 if __name__ == "__main__":
