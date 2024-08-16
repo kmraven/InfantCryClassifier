@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import numpy as np
 import torch
@@ -60,6 +61,7 @@ class Net(nn.Module):
 
 
 def main():
+    shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     transforms = [
