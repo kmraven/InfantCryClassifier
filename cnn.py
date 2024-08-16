@@ -55,7 +55,7 @@ def main():
         # transforms.Resize((128, 111)),
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
-        # transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
+        transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)),
     ])
 
     train_dataset = datasets.ImageFolder(root=train_dir, transform=transform)
