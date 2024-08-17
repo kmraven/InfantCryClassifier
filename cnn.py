@@ -61,7 +61,8 @@ class Net(nn.Module):
 
 
 def main():
-    shutil.rmtree(OUTPUT_DIR)
+    if os.path.isdir(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
     trials_dir = 'trials'
     os.makedirs(os.path.join(OUTPUT_DIR, trials_dir), exist_ok=True)
 
