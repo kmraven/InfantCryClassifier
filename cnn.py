@@ -131,8 +131,9 @@ def main():
                     labels = labels.view_as(predicted)
                     correct += predicted.eq(labels).sum().item()
                     total += labels.size(0)
-                    val_labels.extend(labels.cpu().numpy())
-                    val_probs.extend(outputs.cpu().numpy())
+                    probs = F.softmax(outputs, dim=1)
+                    val_labels.extend(labels.cpu().detach().numpy())
+                    val_probs.extend(probs.cpu().detach().numpy())
             val_loss = running_loss / len(val_loader)
             val_acc = correct / total
             val_probs = np.array(val_probs)
