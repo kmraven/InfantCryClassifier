@@ -10,6 +10,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import optuna
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 from consts import *
 
 seed = 123
@@ -117,6 +118,8 @@ def main():
             running_loss = 0
             correct = 0
             total = 0
+            val_labels = []
+            val_probs = []
             with torch.no_grad():
                 for images, labels in val_loader:
                     images, labels = images.to(device), labels.to(device)
@@ -127,30 +130,36 @@ def main():
                     labels = labels.view_as(predicted)
                     correct += predicted.eq(labels).sum().item()
                     total += labels.size(0)
+                    val_labels.extend(labels.cpu().numpy())
+                    val_probs.extend(outputs.cpu().numpy())
             val_loss = running_loss / len(val_loader)
             val_acc = correct / total
-            return val_loss, val_acc
+            val_probs = np.array(val_probs)
+            val_auc = roc_auc_score(val_labels, val_probs, multi_class='ovr')
+            return val_loss, val_acc, val_auc
 
         loss_list = []
         val_loss_list = []
         val_acc_list = []
+        val_auc_list = []
 
         for _ in range(EPOCH):
             loss = train()
-            val_loss, val_acc = valid()
+            val_loss, val_acc, val_auc = valid()
             loss_list.append(loss)
             val_loss_list.append(val_loss)
             val_acc_list.append(val_acc)
+            val_auc_list.append(val_auc)
         
-        df = pd.DataFrame({
+        pd.DataFrame({
             'epoch': list(range(1, EPOCH + 1)),
             'loss': loss_list,
             'val_loss': val_loss_list,
             'val_acc': val_acc_list,
-        })
-        df.to_csv(os.path.join(OUTPUT_DIR, trials_dir, f"{trial.number}.csv"), index=False)
+            'val_auc': val_auc_list,
+        }).to_csv(os.path.join(OUTPUT_DIR, trials_dir, f"{trial.number}.csv"), index=False)
 
-        return val_acc
+        return val_auc
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=100)
