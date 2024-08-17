@@ -8,7 +8,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
 import optuna
 import pandas as pd
 from consts import *
@@ -28,36 +27,36 @@ kernel = 3
 
 
 class Net(nn.Module):
-  def __init__(self, num_layer, mid_units, num_filters):
-    super(Net, self).__init__()
-    self.activation = nn.ReLU()
-    #第1層
-    self.convs = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=num_filters[0], kernel_size=3)])
-    self.out_height = in_height - kernel + 1
-    self.out_width = in_width - kernel + 1
-    #第2層以降
-    for i in range(1, num_layer):
-      self.convs.append(nn.Conv2d(in_channels=num_filters[i-1], out_channels=num_filters[i], kernel_size=3))
-      self.out_height = self.out_height - kernel + 1
-      self.out_width = self.out_width - kernel + 1
-    #pooling層
-    self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
-    self.out_height = int(self.out_height / 2)
-    self.out_width = int(self.out_width / 2)
-    #線形層
-    self.out_feature = self.out_height * self.out_width * num_filters[num_layer - 1]
-    self.fc1 = nn.Linear(in_features=self.out_feature, out_features=mid_units) 
-    self.fc2 = nn.Linear(in_features=mid_units, out_features=10)
+    def __init__(self, num_layer, mid_units, num_filters):
+        super(Net, self).__init__()
+        self.activation = nn.ReLU()
+        #第1層
+        self.convs = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=num_filters[0], kernel_size=3)])
+        self.out_height = in_height - kernel + 1
+        self.out_width = in_width - kernel + 1
+        #第2層以降
+        for i in range(1, num_layer):
+            self.convs.append(nn.Conv2d(in_channels=num_filters[i-1], out_channels=num_filters[i], kernel_size=3))
+            self.out_height = self.out_height - kernel + 1
+            self.out_width = self.out_width - kernel + 1
+        #pooling層
+        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.out_height = int(self.out_height / 2)
+        self.out_width = int(self.out_width / 2)
+        #線形層
+        self.out_feature = self.out_height * self.out_width * num_filters[num_layer - 1]
+        self.fc1 = nn.Linear(in_features=self.out_feature, out_features=mid_units) 
+        self.fc2 = nn.Linear(in_features=mid_units, out_features=CLASS_NUM)
 
-  def forward(self, x):
-    for l in self.convs:
-      x = l(x)
-      x = self.activation(x)
-    x = self.pool(x)
-    x = x.view(-1, self.out_feature)
-    x = self.fc1(x)
-    x = self.fc2(x)
-    return F.log_softmax(x, dim=1)
+    def forward(self, x):
+        for l in self.convs:
+            x = l(x)
+            x = self.activation(x)
+        x = self.pool(x)
+        x = x.view(-1, self.out_feature)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
 
 
 def main():
@@ -68,7 +67,6 @@ def main():
     transform = [
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),  # 必要？適切？dBの正規化は特殊かも？
     ]
     val_transform = transforms.Compose(transform)
     transform.extend([
@@ -145,18 +143,19 @@ def main():
             val_acc_list.append(val_acc)
         
         df = pd.DataFrame({
-           'loss': loss_list,
-           'val_loss': val_loss_list,
-           'val_acc': val_acc_list,
+            'epoch': list(range(1, EPOCH + 1)),
+            'loss': loss_list,
+            'val_loss': val_loss_list,
+            'val_acc': val_acc_list,
         })
-        df.to_csv(os.path.join(OUTPUT_DIR, trials_dir, f"{trial.number}.csv"))
+        df.to_csv(os.path.join(OUTPUT_DIR, trials_dir, f"{trial.number}.csv"), index=False)
 
         return val_acc
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=100)
     df = study.trials_dataframe()
-    df.to_csv(os.path.join(OUTPUT_DIR, "trials_dataframe.csv"))
+    df.to_csv(os.path.join(OUTPUT_DIR, "trials_dataframe.csv"), index=False)
 
 
 if __name__ == "__main__":

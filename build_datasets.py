@@ -49,8 +49,10 @@ def main():
                             formatted_y = y
                         
                         mel_spectrogram = librosa.feature.melspectrogram(y=formatted_y, sr=sr)
-                        mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=np.max)
-                        mel_spectrogram = cv2.normalize(mel_spectrogram, None, 0, 255, cv2.NORM_MINMAX)
+                        mel_spectrogram = librosa.power_to_db(mel_spectrogram)  # default: ref=1.0, amin=1e-10, top_db=80.0
+                        min_dB, max_dB = -80, 0
+                        mel_spectrogram = 255 * (mel_spectrogram - min_dB) / (max_dB - min_dB)  # 正規化
+                        # mel_spectrogram = cv2.normalize(mel_spectrogram, None, 0, 255, cv2.NORM_MINMAX)  # MINMAXだと良くない
                         mel_spectrogram = mel_spectrogram.astype(np.uint8)
                         cv2.imwrite(os.path.join(save_dir, '.'.join(file.split('.')[:-1]) + '.png'), mel_spectrogram)
 

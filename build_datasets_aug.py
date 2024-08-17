@@ -60,8 +60,10 @@ def save_mel_spectrogram(y, sr, save_file_name, aug_funcs):
     for aug_func in aug_funcs:
         y = aug_func(y)
     mel_spectrogram = librosa.feature.melspectrogram(y=y, sr=sr)
-    mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=np.max)
-    mel_spectrogram = cv2.normalize(mel_spectrogram, None, 0, 255, cv2.NORM_MINMAX)
+    mel_spectrogram = librosa.power_to_db(mel_spectrogram)  # default: ref=1.0, amin=1e-10, top_db=80.0
+    min_dB, max_dB = -80, 0
+    mel_spectrogram = 255 * (mel_spectrogram - min_dB) / (max_dB - min_dB)  # 正規化
+    # mel_spectrogram = cv2.normalize(mel_spectrogram, None, 0, 255, cv2.NORM_MINMAX)  # MINMAXだと良くない
     mel_spectrogram = mel_spectrogram.astype(np.uint8)
     cv2.imwrite(save_file_name, mel_spectrogram)
 
