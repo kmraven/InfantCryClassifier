@@ -13,6 +13,7 @@
   - ハイパーパラメータチューニング
     - 対象は、CNN設計や学習率、荷重減衰
     - 不均衡データのため、最適化指標にはAUCを用いた
+  - 早期終了
 
 ## 結果
 
@@ -27,10 +28,10 @@
   生データ、整形済みデータセット、訓練結果などの可視化を行うためのノートブック
 
 - **build_datasets.py**:  
-  生データを訓練用と検証用に分割し、それをImageFolder形式で保存するスクリプト
-
-- **build_datasets_aug.py**:  
-  生データを訓練用と検証用に分割し、訓練データについてのみ分類クラス間のデータ数のインバランスを改善しつつデータ拡張を行い、その後ImageFolder形式で保存するスクリプト
+  以下を行うスクリプト
+  - 生データを(train, valid, test) = ()に分割
+  - 訓練データについてのみ分類クラス間のデータ数のインバランスを改善しつつデータ拡張
+  - その後ImageFolder形式で保存
 
 - **cnn.py**:  
   CNNモデルを定義し、訓練するスクリプト
@@ -42,6 +43,6 @@
 % git clone https://github.com/gveres/donateacry-corpus
 % python -m venv <YOUR_VENV_NAME>
 % pip install -r requirements.txt
-% python build_datasets_aug.py
+% python build_datasets.py
 % python cnn.py <GPU_ID_IN_YOUR_ENV>
 ```
